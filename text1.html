@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KurdFlux - هەموو کەناڵەکان</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        :root {
+            --bg: #05070a;
+            --card: #12161f;
+            --accent: #007aff;
+            --text: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding-bottom: 50px;
+        }
+
+        /* Header Section */
+        header {
+            background: #0a0d14;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 2px solid var(--accent);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo { font-size: 30px; font-weight: bold; color: var(--accent); margin-bottom: 15px; }
+        .logo span { color: white; }
+
+        /* Controls Section */
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            padding: 10px;
+        }
+
+        select, input {
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #252d3d;
+            background: #12161f;
+            color: white;
+            outline: none;
+            min-width: 200px;
+        }
+
+        /* Player Section */
+        .player-box {
+            width: 90%;
+            max-width: 900px;
+            margin: 20px auto;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            background: #000;
+        }
+        video { width: 100%; aspect-ratio: 16/9; }
+
+        /* Grid Layout */
+        .channels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 15px;
+            padding: 20px 5%;
+        }
+
+        .channel-card {
+            background: var(--card);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.3s;
+            border: 1px solid transparent;
+        }
+
+        .channel-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent);
+            background: #1c222d;
+        }
+
+        .channel-card img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 8px;
+            padding: 2px;
+        }
+
+        .channel-card p {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .loading { text-align: center; padding: 50px; font-size: 18px; color: var(--accent); }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">Kurd<span>Flux</span></div>
+    <div class="controls">
+        <select id="categorySelect" onchange="loadChannels()">
+            <option value="countries/iq.m3u">🇮🇶 عێراق و کوردستان</option>
+            <option value="countries/sa.m3u">🇸🇦 سعودیە</option>
+            <option value="categories/sports.m3u">⚽ وەرزش</option>
+            <option value="categories/documentary.m3u">🐾 گیانەوەران و بەڵگەنامەیی</option>
+            <option value="countries/tr.m3u">🇹🇷 تورکیا</option>
+            <option value="countries/us.m3u">🇺🇸 ئەمریکا</option>
+            <option value="countries/uk.m3u">🇬🇧 بەریتانیا</option>
+            <option value="categories/news.m3u">📰 هەواڵە جیهانییەکان</option>
+            <option value="categories/kids.m3u">👶 منداڵان</option>
+        </select>
+        
+        <input type="text" id="searchInput" placeholder="بگەڕێ بۆ کەناڵ..." onkeyup="filterChannels()">
+    </div>
+</header>
+
+<div class="player-box">
+    <video id="video" controls></video>
+</div>
+
+<div id="loader" class="loading" style="display:none;">خەریکی بارکردنی کەناڵەکانە...</div>
+
+<div class="channels-grid" id="grid">
+    </div>
+
+<script>
+    const video = document.getElementById('video');
+    const grid = document.getElementById('grid');
+    const loader = document.getElementById('loader');
+    const hls = new Hls();
+
+    async function loadChannels() {
+        const path = document.getElementById('categorySelect').value;
+        const url = `https://iptv-org.github.io/iptv/${path}`;
+        
+        grid.innerHTML = '';
+        loader.style.display = 'block';
+
+        try {
+            const res = await fetch(url);
+            const text = await res.text();
+            const lines = text.split('\n');
+            
+            loader.style.display = 'none';
+
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith('#EXTINF')) {
+                    const name = lines[i].split(',')[1] || "کەناڵ";
+                    const logoMatch = lines[i].match(/tvg-logo="([^"]+)"/);
+                    const logo = logoMatch ? logoMatch[1] : 'https://via.placeholder.com/60/12161f/ffffff?text=TV';
+                    const streamUrl = lines[i+1]?.trim();
+
+                    if(streamUrl && streamUrl.startsWith('http')) {
+                        const card = document.createElement('div');
+                        card.className = 'channel-card';
+                        card.innerHTML = `
+                            <img src="${logo}" onerror="this.src='https://via.placeholder.com/60/12161f/ffffff?text=TV'">
+                            <p>${name}</p>
+                        `;
+                        card.onclick = () => {
+                            playStream(streamUrl);
+                            window.scrollTo({ top: 150, behavior: 'smooth' });
+                        };
+                        grid.appendChild(card);
+                    }
+                }
+            }
+        } catch (e) {
+            loader.innerText = "هەڵە لە بارکردنی داتا دروست بوو.";
+        }
+    }
+
+    function playStream(url) {
+        if (Hls.isSupported()) {
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        } else {
+            video.src = url;
+            video.play();
+        }
+    }
+
+    function filterChannels() {
+        const q = document.getElementById('searchInput').value.toLowerCase();
+        const cards = document.getElementsByClassName('channel-card');
+        for (let card of cards) {
+            card.style.display = card.innerText.toLowerCase().includes(q) ? 'block' : 'none';
+        }
+    }
+
+    // دەستپێکردنی یەکەم جار
+    loadChannels();
+</script>
+
+</body>
+</html>
